@@ -25,7 +25,7 @@ class BTAudioRouter:
         self.stop()
         sys.exit(0)
 
-    def fun_command(self, cmd): 
+    def run_command(self, cmd): 
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
             return result.returncode == 0
