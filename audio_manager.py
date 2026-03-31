@@ -64,15 +64,22 @@ class AudioManager:
     def setup(self):
         print("Setting up audio routing...")
 
-        print("   Restarting PulseAudio to apply changes...")
-        subprocess.run(["pulseaudio", "-k"], capture_output=True)
-        time.sleep(1)
-        subprocess.run(["pulseaudio", "--start"], capture_output=True)
-        time.sleep(2)
+        # Check if running under PipeWire — if so, skip PulseAudio-specific steps
+        result = self._pactl("info")
+        is_pipewire = "PipeWire" in result.stdout if result.returncode == 0 else False
 
-        print("   Loading Bluetooth audio modules...")
-        for module in ["module-bluetooth-discover", "module-bluetooth-policy", "module-switch-on-connect"]:
-            self._pactl("load-module", module)
+        if is_pipewire:
+            print("   Detected PipeWire audio server — skipping PulseAudio restart and module loading.")
+        else:
+            print("   Restarting PulseAudio to apply changes...")
+            subprocess.run(["pulseaudio", "-k"], capture_output=True)
+            time.sleep(1)
+            subprocess.run(["pulseaudio", "--start"], capture_output=True)
+            time.sleep(2)
+
+            print("   Loading Bluetooth audio modules...")
+            for module in ["module-bluetooth-discover", "module-bluetooth-policy", "module-switch-on-connect"]:
+                self._pactl("load-module", module)
 
         self._set_default_sink()
         self._print_available_devices()
