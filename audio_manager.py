@@ -105,29 +105,57 @@ class AudioManager:
 
     def get_sources(self):
         try:
-            return [{"id": s["index"], "name": s["name"]} for s in self._parse_sources()]
+            return [{"id": s["index"], "name": s["name"], "description": s.get("description", s["name"])} for s in self._parse_sources()]
         except Exception:
             return []
 
     def set_default_source(self, source_name):
         try:
             result = self._pactl("set-default-source", source_name)
-            return result.returncode == 0
+            if result.returncode != 0:
+                return False
+            self._move_source_outputs(source_name)
+            return True
         except Exception:
             return False
 
+    def _move_source_outputs(self, source_name):
+        """Move all existing source-outputs (recording streams) to the given source."""
+        result = self._pactl("list", "short", "source-outputs")
+        if result.returncode != 0:
+            return
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if parts:
+                stream_id = parts[0]
+                self._pactl("move-source-output", stream_id, source_name)
+
     def get_sinks(self):
         try:
-            return [{"id": s["index"], "name": s["name"]} for s in self._parse_sinks()]
+            return [{"id": s["index"], "name": s["name"], "description": s.get("description", s["name"])} for s in self._parse_sinks()]
         except Exception:
             return []
 
     def set_default_sink_by_name(self, sink_name):
         try:
             result = self._pactl("set-default-sink", sink_name)
-            return result.returncode == 0
+            if result.returncode != 0:
+                return False
+            self._move_sink_inputs(sink_name)
+            return True
         except Exception:
             return False
+
+    def _move_sink_inputs(self, sink_name):
+        """Move all existing sink-inputs (playback streams) to the given sink."""
+        result = self._pactl("list", "short", "sink-inputs")
+        if result.returncode != 0:
+            return
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if parts:
+                stream_id = parts[0]
+                self._pactl("move-sink-input", stream_id, sink_name)
 
     def start_cycle_test(self, interval=2):
         sources = self.get_sources()

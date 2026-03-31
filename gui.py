@@ -116,7 +116,7 @@ class AudioRouterGUI:
             self._sources = sources
             self.source_list.delete(0, tk.END)
             for s in sources:
-                self.source_list.insert(tk.END, s["name"])
+                self.source_list.insert(tk.END, s["description"])
             if selected_name and selected_name in new_names:
                 self.source_list.selection_set(new_names.index(selected_name))
         else:
@@ -136,7 +136,7 @@ class AudioRouterGUI:
             self._sinks = sinks
             self.sink_list.delete(0, tk.END)
             for s in sinks:
-                self.sink_list.insert(tk.END, s["name"])
+                self.sink_list.insert(tk.END, s["description"])
             if selected_name and selected_name in new_names:
                 self.sink_list.selection_set(new_names.index(selected_name))
         else:
@@ -161,10 +161,10 @@ class AudioRouterGUI:
         source = self._sources[selection[0]]
         if self.audio.set_default_source(source["name"]):
             self.current_source = source["name"]
-            self.active_source_label.config(text=source["name"])
-            self.status_bar.config(text=f"Input set to: {source['name']}")
+            self.active_source_label.config(text=source["description"])
+            self.status_bar.config(text=f"Input set to: {source['description']}")
         else:
-            self.status_bar.config(text=f"Failed to set input: {source['name']}")
+            self.status_bar.config(text=f"Failed to set input: {source['description']}")
 
     def _on_switch_sink(self):
         selection = self.sink_list.curselection()
@@ -175,10 +175,10 @@ class AudioRouterGUI:
         sink = self._sinks[selection[0]]
         if self.audio.set_default_sink_by_name(sink["name"]):
             self.current_sink = sink["name"]
-            self.active_sink_label.config(text=sink["name"])
-            self.status_bar.config(text=f"Output set to: {sink['name']}")
+            self.active_sink_label.config(text=sink["description"])
+            self.status_bar.config(text=f"Output set to: {sink['description']}")
         else:
-            self.status_bar.config(text=f"Failed to set output: {sink['name']}")
+            self.status_bar.config(text=f"Failed to set output: {sink['description']}")
 
     def run(self):
         self.root.mainloop()
