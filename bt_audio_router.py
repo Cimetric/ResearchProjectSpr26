@@ -30,7 +30,9 @@ class BTAudioRouter:
         self.stop()
         sys.exit(0)
     
-    def start(self, test_cycle=False, cycle_interval=5, gui=False):
+    def start(self, test_cycle=False, cycle_interval=5, gui=False,
+              capture=False, capture_source=None, capture_sink=None,
+              capture_buffer=64, force_a2dp=False):
         print("=" * 60)
         print("Bluetooth Audio Router for Raspberry Pi 5")
         print("=" * 60)
@@ -45,6 +47,12 @@ class BTAudioRouter:
             sys.exit(1)
         
         print()
+
+        if force_a2dp:
+            from force_a2dp import force_a2dp_all
+            print("Forcing A2DP profile on all Bluetooth cards...")
+            force_a2dp_all()
+            print()
         
         if not self.audio.setup():
             print("ERROR: Audio setup failed. Exiting.")
@@ -57,6 +65,8 @@ class BTAudioRouter:
             print("MODE: Source cycle test")
         if gui:
             print("MODE: GUI")
+        if capture:
+            print("MODE: Capture pipeline (PCM through Python)")
         print("=" * 60)
         print()
         print("Instructions:")
@@ -71,6 +81,10 @@ class BTAudioRouter:
         if test_cycle:
             self.audio.start_cycle_test(interval=cycle_interval)
 
+        if capture:
+            self._start_capture_mode(capture_source, capture_sink, capture_buffer, gui)
+            return
+
         if gui:
             from gui import AudioRouterGUI
             self.gui = AudioRouterGUI(self.audio)
@@ -84,6 +98,36 @@ class BTAudioRouter:
                 self.mainloop.run()
             except KeyboardInterrupt:
                 print("\nExiting the D-Bus service...")
+                self.stop()
+                sys.exit(0)
+
+    def _start_capture_mode(self, source, sink, buffer_chunks, gui):
+        from capture_pipeline import CapturePipeline, list_sources, list_sinks, interactive_select
+
+        source = source or interactive_select(list_sources(), "source")
+        sink = sink or interactive_select(list_sinks(), "sink")
+
+        self.capture_pipeline = CapturePipeline(
+            source_name=source,
+            sink_name=sink,
+            buffer_chunks=buffer_chunks,
+        )
+        self.capture_pipeline.start(print_stats=True)
+
+        if gui:
+            from gui import AudioRouterGUI
+            self.gui = AudioRouterGUI(self.audio, capture_pipeline=self.capture_pipeline)
+            try:
+                self.gui.run()
+            finally:
+                self.capture_pipeline.stop()
+                self.stop()
+        else:
+            try:
+                self.mainloop = GLib.MainLoop()
+                self.mainloop.run()
+            except KeyboardInterrupt:
+                self.capture_pipeline.stop()
                 self.stop()
                 sys.exit(0)
     

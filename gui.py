@@ -5,8 +5,9 @@ class AudioRouterGUI:
 
     REFRESH_INTERVAL_MS = 3000
 
-    def __init__(self, audio_manager):
+    def __init__(self, audio_manager, capture_pipeline=None):
         self.audio = audio_manager
+        self.capture = capture_pipeline
         self.current_source = None
         self.current_sink = None
 
@@ -179,7 +180,18 @@ class AudioRouterGUI:
         if self.audio.set_default_source(source["name"]):
             self.current_source = source["name"]
             self.active_source_label.config(text=source["description"])
-            self.status_bar.config(text=f"Input set to: {source['description']}")
+            # If capture pipeline is running, switch its source
+            if self.capture and self.capture._running:
+                self.capture.switch_source(source["name"])
+                self.status_bar.config(text=f"Input + capture switched to: {source['description']}")
+            # Restart loopback with new source if one is active
+            elif self.audio._loopback_module_id:
+                if self.audio.restart_loopback(source_name=source["name"]):
+                    self.status_bar.config(text=f"Input + loopback switched to: {source['description']}")
+                else:
+                    self.status_bar.config(text=f"Input set but loopback restart failed")
+            else:
+                self.status_bar.config(text=f"Input set to: {source['description']}")
         else:
             self.status_bar.config(text=f"Failed to set input: {source['description']}")
 
@@ -193,7 +205,18 @@ class AudioRouterGUI:
         if self.audio.set_default_sink_by_name(sink["name"]):
             self.current_sink = sink["name"]
             self.active_sink_label.config(text=sink["description"])
-            self.status_bar.config(text=f"Output set to: {sink['description']}")
+            # If capture pipeline is running, switch its sink
+            if self.capture and self.capture._running:
+                self.capture.switch_sink(sink["name"])
+                self.status_bar.config(text=f"Output + capture switched to: {sink['description']}")
+            # Restart loopback with new sink if one is active
+            elif self.audio._loopback_module_id:
+                if self.audio.restart_loopback(sink_name=sink["name"]):
+                    self.status_bar.config(text=f"Output + loopback switched to: {sink['description']}")
+                else:
+                    self.status_bar.config(text=f"Output set but loopback restart failed")
+            else:
+                self.status_bar.config(text=f"Output set to: {sink['description']}")
         else:
             self.status_bar.config(text=f"Failed to set output: {sink['description']}")
 
@@ -225,4 +248,6 @@ class AudioRouterGUI:
     def stop(self):
         self._running = False
         self.audio.stop_loopback()
+        if self.capture:
+            self.capture.stop()
         self.root.destroy()

@@ -16,7 +16,36 @@ if __name__ == "__main__":
         "--gui", action="store_true",
         help="Launch the GUI for manual source switching"
     )
+    parser.add_argument(
+        "--capture", action="store_true",
+        help="Use capture-based pipeline (reads PCM through Python instead of module-loopback)"
+    )
+    parser.add_argument(
+        "--capture-source", type=str, default=None,
+        help="PulseAudio source name for capture mode (interactive if omitted)"
+    )
+    parser.add_argument(
+        "--capture-sink", type=str, default=None,
+        help="PulseAudio sink name for capture mode (interactive if omitted)"
+    )
+    parser.add_argument(
+        "--capture-buffer", type=int, default=64,
+        help="Ring buffer size in chunks for capture mode (default: 64)"
+    )
+    parser.add_argument(
+        "--force-a2dp", action="store_true",
+        help="Force A2DP profile on all Bluetooth cards at startup"
+    )
     args = parser.parse_args()
 
     router = BTAudioRouter()
-    router.start(test_cycle=args.test_cycle, cycle_interval=args.cycle_interval, gui=args.gui)
+    router.start(
+        test_cycle=args.test_cycle,
+        cycle_interval=args.cycle_interval,
+        gui=args.gui,
+        capture=args.capture,
+        capture_source=args.capture_source,
+        capture_sink=args.capture_sink,
+        capture_buffer=args.capture_buffer,
+        force_a2dp=args.force_a2dp,
+    )

@@ -10,6 +10,9 @@ class AudioManager:
         self._cycling = False
         self._cycle_thread = None
         self._loopback_module_id = None
+        self._loopback_source = None
+        self._loopback_sink = None
+        self._loopback_latency = 200
 
     def _pactl(self, *args):
         """Run a pactl command and return stdout."""
@@ -178,6 +181,9 @@ class AudioManager:
         if result.returncode == 0:
             module_id = result.stdout.strip()
             self._loopback_module_id = module_id
+            self._loopback_source = source_name
+            self._loopback_sink = sink_name
+            self._loopback_latency = latency_msec
             print(f"Loopback started (module {module_id}): {source_name} -> {sink_name}, buffer {latency_msec}ms")
             return True
         else:
@@ -190,6 +196,20 @@ class AudioManager:
             self._pactl("unload-module", self._loopback_module_id)
             print(f"Loopback stopped (module {self._loopback_module_id})")
             self._loopback_module_id = None
+            self._loopback_source = None
+            self._loopback_sink = None
+
+    def restart_loopback(self, source_name=None, sink_name=None):
+        """Restart the loopback with optionally updated source/sink.
+        Only does anything if a loopback is currently running."""
+        if not self._loopback_module_id:
+            return False
+        new_source = source_name or self._loopback_source
+        new_sink = sink_name or self._loopback_sink
+        latency = self._loopback_latency
+        if not new_source or not new_sink:
+            return False
+        return self.start_loopback(new_source, new_sink, latency)
 
     def start_cycle_test(self, interval=2):
         sources = self.get_sources()
