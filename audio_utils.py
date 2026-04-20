@@ -102,10 +102,7 @@ def get_bt_devices():
     """
     # 1. Get all sources and filter for BT monitor sources first
     all_sources = list_devices("sources")
-    bt_monitor_sources = {
-        s['name'].split('.monitor')[0]: s 
-        for s in all_sources if "bluez" in s.get("name", "") and ".monitor" in s.get("name", "")
-    }
+    bt_monitor_sources = [s for s in all_sources if "bluez" in s.get("name", "") and ".monitor" in s.get("name", "")]
 
     # 2. Get all BT cards
     cards_result = _pactl("list", "cards")
@@ -138,13 +135,12 @@ def get_bt_devices():
         if not ensure_a2dp_sink(device["name"]):
             continue
 
-        device_mac = device.get("properties", {}).get("device.string", "").replace("_", ":")
+        device_mac = device.get("properties", {}).get("device.string", "") # e.g., 74_DF_3A_3E_2D_2D
         device["description"] = device.get("properties", {}).get("device.alias", f"BT Device {device_mac}")
         
-        # Find the corresponding monitor source from our pre-filtered list
-        # We match the card name (e.g., bluez_card.XX_XX...) with the start of the monitor name
+        # Find the corresponding monitor source by matching the MAC address string
         matching_source = next(
-            (bt_monitor_sources[key] for key in bt_monitor_sources if device["name"] in key),
+            (s for s in bt_monitor_sources if device_mac in s.get("name", "")),
             None
         )
         
