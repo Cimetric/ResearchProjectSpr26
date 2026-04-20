@@ -119,11 +119,12 @@ class MultiPhoneSwitcher(tk.Tk):
             self.status_label.config(text="Error: Select a valid phone and speaker.", foreground="red")
             return
             
-        if not initial_device['monitor_source_name']:
+        if not initial_device.get('monitor_source_name'):
             self.status_label.config(text=f"Error: {initial_device['description']} is not playing audio.", foreground="red")
             return
 
         self.status_label.config(text="Starting exclusive mode...", foreground="yellow")
+        self.update_idletasks() # Force UI update
         self.null_sink_manager.setup()
 
         self.capture_pipeline = CapturePipeline(initial_device['monitor_source_name'], initial_sink['name'])
