@@ -112,27 +112,40 @@ class MultiPhoneSwitcher(tk.Tk):
         source_choice = self.device_var.get()
         sink_choice = self.speaker_var.get()
 
+        print(f"HUB_DEBUG: Source selected in dropdown: '{source_choice}'")
+        print(f"HUB_DEBUG: Sink selected in dropdown: '{sink_choice}'")
+
         initial_device = next((dev for dev in self.bt_devices if dev['description'] == source_choice), None)
         initial_sink = next((s for s in self.speaker_sinks if s['description'] == sink_choice), None)
 
+        print(f"HUB_DEBUG: Found device object: {initial_device}")
+        print(f"HUB_DEBUG: Found sink object: {initial_sink}")
+
         if not initial_device or not initial_sink:
             self.status_label.config(text="Error: Select a valid phone and speaker.", foreground="red")
+            print("HUB_DEBUG: ERROR - Could not find initial device or sink object.")
             return
             
         if not initial_device.get('monitor_source_name'):
             self.status_label.config(text=f"Error: {initial_device['description']} is not playing audio.", foreground="red")
+            print(f"HUB_DEBUG: ERROR - Device '{initial_device['description']}' has no monitor source.")
             return
 
         self.status_label.config(text="Starting exclusive mode...", foreground="yellow")
-        self.update_idletasks() # Force UI update
+        self.update_idletasks()
         self.null_sink_manager.setup()
 
-        self.capture_pipeline = CapturePipeline(initial_device['monitor_source_name'], initial_sink['name'])
+        capture_source = initial_device['monitor_source_name']
+        capture_sink = initial_sink['name']
+        
+        print(f"HUB_DEBUG: Starting capture with SOURCE: '{capture_source}' and SINK: '{capture_sink}'")
+
+        self.capture_pipeline = CapturePipeline(capture_source, capture_sink)
         self.capture_pipeline.start()
 
         self.start_stop_btn.config(text="Stop Hub")
         self.status_label.config(text=f"Hub Active. Playing from {initial_device['description']}", foreground="green")
-
+    
     def stop_hub(self):
         """Stops the capture and cleans up."""
         if self.capture_pipeline:
