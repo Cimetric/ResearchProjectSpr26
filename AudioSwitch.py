@@ -28,14 +28,14 @@ class MultiPhoneSwitcher(tk.Tk):
 
         # Dropdown for Paired Devices
         self.device_var = tk.StringVar(value="Select a device")
-        self.device_menu = ttk.ComboBox(self, textvariable=self.device_var, width=40)
+        self.device_menu = ttk.Combobox(self, textvariable=self.device_var, width=40)
         self.device_menu.pack(pady=5)
         self.device_menu.bind("<<ComboBoxSelected>>", self.on_source_select)
 
 
         # Dropdown for Speaker Output
         self.speaker_var = tk.StringVar(value="Select a speaker")
-        self.speaker_menu = ttk.ComboBox(self, textvariable=self.speaker_var, width=40)
+        self.speaker_menu = ttk.Combobox(self, textvariable=self.speaker_var, width=40)
         self.speaker_menu.pack(pady=5)
         self.speaker_menu.bind("<<ComboBoxSelected>>", self.on_sink_select)
 
