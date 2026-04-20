@@ -5,6 +5,11 @@ import subprocess
 import threading
 import time
 import collections
+import audio_utils
+
+# Open a file to capture stderr from subprocesses
+# The 'w' mode means it's overwritten each time the app starts
+error_log_file = open("pipeline_errors.log", "w")
 
 class CapturePipeline:
     """
@@ -21,6 +26,7 @@ class CapturePipeline:
         self._record_proc = None
         self._play_proc = None
         self._reader_thread = None
+        self.parec_proc = None
         self.paplay_proc = None
 
     def start(self):
@@ -48,9 +54,10 @@ class CapturePipeline:
         self._record_proc = subprocess.Popen(
             ["parec", "-d", self.source_name, "--format=s16le"],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=error_log_file # Redirect stderr to the log file
         )
-        self._play_proc = subprocess.Popen(
+
+        self.paplay_proc = subprocess.Popen(
             [
                 "paplay",
                 "--device", self.sink_name,
@@ -58,8 +65,10 @@ class CapturePipeline:
             ],
             stdin=self._record_proc.stdout,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=error_log_file # Redirect stderr to the log file
         )
+        # Allow parec_proc to receive a SIGPIPE if paplay_proc exits.
+        self._record_proc.stdout.close()
         self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
         self._reader_thread.start()
 
