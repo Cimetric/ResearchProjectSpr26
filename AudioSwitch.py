@@ -57,7 +57,8 @@ class MultiPhoneSwitcher(tk.Tk):
     def refresh_lists(self):
         """Refreshes the list of available Bluetooth devices and speaker sinks."""
         self.bt_devices = get_bt_devices()
-        self.speaker_sinks = [s for s in list_devices("sinks") if "bluez" not in s.get("name", "")]
+        # Show ALL sinks, including bluez (Bluetooth) sinks
+        self.speaker_sinks = list_devices("sinks")
 
         bt_names = [dev['description'] for dev in self.bt_devices]
         speaker_names = [f"{s['description']}" for s in self.speaker_sinks]
