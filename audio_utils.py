@@ -299,7 +299,7 @@ def get_bt_devices():
 
     return processed_devices
 
-def activate_bt_source_cards(exclude_macs=None):
+def activate_bt_source_cards(exclude_macs=None, log_file=None):
     """
     Set all BT phone cards to 'a2dp-source' profile, skipping any whose MAC
     is in exclude_macs (typically the speaker). Called on startup to wake up
@@ -311,20 +311,48 @@ def activate_bt_source_cards(exclude_macs=None):
     exclude_macs = {_normalize_mac(m) for m in exclude_macs}
 
     activated = 0
+    log_content = "--- Activating BT Source Cards ---\n"
+
     for card in _list_bt_cards():
         card_name = card.get("name", "")
         card_mac = _normalize_mac(
             card.get("properties", {}).get("device.string", "")
         ) or _extract_mac(card_name)
+        
         if card_mac in exclude_macs:
-            print(f"ACTIVATE: Skipping {card_name} (speaker)")
+            log_content += f"ACTIVATE: Skipping {card_name} (identified as speaker)\n"
             continue
-        result = _pactl("set-card-profile", card_name, "a2dp-source")
-        if result and result.returncode == 0:
-            print(f"ACTIVATE: {card_name} -> a2dp-source")
-            activated += 1
-        else:
-            print(f"ACTIVATE: {card_name} could not be set to a2dp-source (may be unsupported or already active)")
+
+        command = ["pactl", "set-card-profile", card_name, "a2dp-source"]
+        try:
+            result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=5)
+            log_entry = (
+                f"Attempted to activate card: {card_name} (MAC: {card_mac})\n"
+                f"  Command: {' '.join(command)}\n"
+                f"  Return Code: {result.returncode}\n"
+                f"  Stdout: {result.stdout.strip()}\n"
+                f"  Stderr: {result.stderr.strip()}\n\n"
+            )
+            log_content += log_entry
+            if result.returncode == 0:
+                print(f"ACTIVATE: Successfully set {card_name} to a2dp-source.")
+                activated += 1
+            else:
+                print(f"ACTIVATE: Failed to set {card_name} to a2dp-source. See '{log_file}' for details.")
+        except subprocess.TimeoutExpired:
+            log_content += f"Timeout expired while activating {card_name}.\n\n"
+            print(f"Timeout trying to activate {card_name}.")
+        except Exception as e:
+            log_content += f"Exception while activating {card_name}: {e}\n\n"
+            print(f"An exception occurred while trying to activate {card_name}.")
+
+    if log_file:
+        try:
+            with open(log_file, "a") as f:
+                f.write(log_content)
+        except IOError as e:
+            print(f"Error writing to log file {log_file}: {e}")
+            
     return activated
 
 

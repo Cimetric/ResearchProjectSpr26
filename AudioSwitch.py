@@ -154,7 +154,12 @@ class MultiPhoneSwitcher(tk.Tk):
 
     def connect_pair(self):
         """Activate all phone cards, refresh lists, then route selected phone to speaker."""
-        activate_bt_source_cards(exclude_macs=self._speaker_macs())
+        log_file = "pipeline_errors.log"
+        # Clear previous log content
+        with open(log_file, "w") as f:
+            f.write("--- New Session ---\n")
+            
+        activate_bt_source_cards(exclude_macs=self._speaker_macs(), log_file=log_file)
         self.after(1500, self._connect_pair_after_wake)
         self.status_label.config(text="Waking up Bluetooth sources...", foreground="yellow")
 
@@ -164,8 +169,13 @@ class MultiPhoneSwitcher(tk.Tk):
 
     def _try_auto_start(self):
         """Activate all phone BT cards then auto-start the hub after a short delay."""
+        log_file = "pipeline_errors.log"
+        # Clear previous log content
+        with open(log_file, "w") as f:
+            f.write("--- New Session ---\n")
+
         # Speaker sinks may already be populated from __init__ refresh_lists().
-        activate_bt_source_cards(exclude_macs=self._speaker_macs())
+        activate_bt_source_cards(exclude_macs=self._speaker_macs(), log_file=log_file)
         self.status_label.config(text="Waking up Bluetooth sources...", foreground="yellow")
         self.after(2000, self._auto_start_after_wake)
 
