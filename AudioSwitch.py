@@ -146,14 +146,25 @@ class MultiPhoneSwitcher(tk.Tk):
         
         print(f"HUB_DEBUG: Starting capture with SOURCE: '{capture_source}' and SINK: '{capture_sink}'")
 
-        # Unmute the source in case a previous Stop Hub left it muted.
-        self.null_sink_manager.set_active_source(capture_source)
+        # Unconditionally unmute source and sink before starting.
+        # PipeWire persists mute state across BT reconnections (including when
+        # the suffix changes e.g. .2 -> .4), so we always force-unmute both.
+        subprocess.run(["pactl", "set-source-mute", capture_source, "0"],
+                       capture_output=True, text=True)
+        subprocess.run(["pactl", "set-sink-mute", capture_sink, "0"],
+                       capture_output=True, text=True)
 
-        # Force A2DP on the speaker — recovers from HFP mode that can occur
-        # when the BT connection is renegotiated after Stop Hub.
+        # Force A2DP on the speaker — recovers from HFP mode.
         if capture_sink.startswith("bluez_output."):
             mac_part = capture_sink[len("bluez_output."):].rsplit(".", 1)[0]
             ensure_a2dp_sink(f"bluez_card.{mac_part}")
+
+        # Teardown any existing pipeline and create a fresh one.
+        # If the phone stayed connected (Stop Hub kept links), pw-link returns
+        # "file exists" which is treated as OK — minimal disruption.
+        if self.capture_pipeline:
+            self.capture_pipeline.teardown()
+            self.capture_pipeline = None
 
         pipeline = CapturePipeline(capture_source, capture_sink)
         if not pipeline.is_running():
@@ -191,27 +202,37 @@ class MultiPhoneSwitcher(tk.Tk):
         self.after(5000, self._schedule_hub_refresh)
 
     def stop_hub(self):
-        """Stops the capture pipeline and silences the active source.
-        Sources stay muted until Start Hub is pressed again, preventing audio
-        from leaking through any WirePlumber default routes that remain.
+        """Pause the hub. The speaker sink is muted instead of removing links.
+        Keeping links alive prevents iOS/Android from dropping the A2DP Source
+        connection when there is no active consumer.
         """
-        if self.capture_pipeline:
-            # Mute the active source BEFORE removing our links so there is no
-            # audio gap where WirePlumber's own links could pass audio.
-            self.null_sink_manager.mute_active_source()
-            self.capture_pipeline.stop()
-            self.capture_pipeline = None
-        # Stop the watcher thread but do NOT unmute — sources stay muted.
         self.null_sink_manager.stop_watcher()
+        if self.capture_pipeline:
+            sink_name = self.capture_pipeline.sink_name
+            result = subprocess.run(
+                ["pactl", "set-sink-mute", sink_name, "1"],
+                capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                print(f"Sink {sink_name} muted — links kept alive.")
+            else:
+                print(f"Warning: could not mute sink {sink_name}: {result.stderr.strip()}")
+            self.capture_pipeline.stop()  # logical stop; links remain
+            # Keep self.capture_pipeline set so on_closing() can restore the sink.
         self.start_stop_btn.config(text="Start Hub")
-        self.status_label.config(text="Status: Hub Stopped.", foreground="gray")
+        self.status_label.config(text="Status: Hub Paused.", foreground="gray")
 
     def on_closing(self):
-        """Ensure full cleanup (including unmuting all sources) when the window closes."""
-        self.stop_hub()
-        # teardown() unmutes every source we muted, so BT audio works normally
-        # after the app exits.
+        """Full cleanup on window close: unmute sink, remove links, stop watcher."""
         self.null_sink_manager.teardown()
+        if self.capture_pipeline:
+            # Restore sink so system audio works normally after the app exits.
+            subprocess.run(
+                ["pactl", "set-sink-mute", self.capture_pipeline.sink_name, "0"],
+                capture_output=True, text=True,
+            )
+            self.capture_pipeline.teardown()
+            self.capture_pipeline = None
         self.destroy()
 
 if __name__ == "__main__":

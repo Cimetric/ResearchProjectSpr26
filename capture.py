@@ -225,14 +225,19 @@ class CapturePipeline:
         return False
 
     def stop(self):
-        # Only tear down links WE created.  WirePlumber's own links are left
-        # intact so it can restore default routing later.  The NullSinkManager
-        # mutes the active source to silence audio through any remaining links.
-        self._unlink_links(self.created_link_ports)
+        # Keep PipeWire links alive so phones maintain their A2DP Source
+        # connection (iOS/Android drop A2DP when no consumer exists).
+        # The caller mutes the speaker SINK instead to silence audio.
+        self._running = False
+        print("Hub paused (PipeWire links kept alive).")
+
+    def teardown(self):
+        """Actually remove all PipeWire links. Call on device switch or app exit."""
+        self._unlink_links(self.link_ports)
         self.link_ports = []
         self.created_link_ports = []
         self._running = False
-        print("PipeWire links stopped.")
+        print("PipeWire links removed.")
 
     def is_running(self):
         return self._running
@@ -255,18 +260,8 @@ class NullSinkManager:
         self._watcher_thread = None
 
     def set_active_source(self, source_name):
-        """Switch the protected source. Immediately unmutes it if we had muted it."""
+        """Update the currently active source. Unmuting is handled by start_hub()."""
         self._active_source_name = source_name
-        if source_name and source_name in self._muted_sources:
-            self._set_mute(source_name, False)
-            self._muted_sources.discard(source_name)
-
-    def mute_active_source(self):
-        """Mute the active source on Stop Hub so audio doesn't leak through
-        any WirePlumber routes that remain after we remove our own links."""
-        if self._active_source_name:
-            self._set_mute(self._active_source_name, True)
-            self._muted_sources.add(self._active_source_name)
 
     def start_watcher(self, active_source_name, active_sink_name):
         """Start background thread that keeps non-active BT sources muted."""
@@ -356,10 +351,8 @@ class NullSinkManager:
         return True
 
     def teardown(self):
-        """Stop watcher and unmute every source we muted."""
+        """Stop watcher and unmute any non-active sources the watcher had muted."""
         self.stop_watcher()
-        if self._muted_sources:
-            for source_name in list(self._muted_sources):
-                self._set_mute(source_name, False)
-            self._muted_sources.clear()
-            print("All sources unmuted.")
+        for source_name in list(self._muted_sources):
+            self._set_mute(source_name, False)
+        self._muted_sources.clear()
