@@ -225,9 +225,10 @@ class CapturePipeline:
         return False
 
     def stop(self):
-        # Tear down all active links (including pre-existing ones WirePlumber created),
-        # so audio stops completely when the hub is stopped.
-        self._unlink_links(self.link_ports)
+        # Only tear down links WE created.  WirePlumber's own links are left
+        # intact so it can restore default routing later.  The NullSinkManager
+        # mutes the active source to silence audio through any remaining links.
+        self._unlink_links(self.created_link_ports)
         self.link_ports = []
         self.created_link_ports = []
         self._running = False
@@ -259,6 +260,13 @@ class NullSinkManager:
         if source_name and source_name in self._muted_sources:
             self._set_mute(source_name, False)
             self._muted_sources.discard(source_name)
+
+    def mute_active_source(self):
+        """Mute the active source on Stop Hub so audio doesn't leak through
+        any WirePlumber routes that remain after we remove our own links."""
+        if self._active_source_name:
+            self._set_mute(self._active_source_name, True)
+            self._muted_sources.add(self._active_source_name)
 
     def start_watcher(self, active_source_name, active_sink_name):
         """Start background thread that keeps non-active BT sources muted."""

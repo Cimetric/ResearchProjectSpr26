@@ -11,16 +11,17 @@ def _pactl(*args):
     try:
         result = subprocess.run(
             command,
-            capture_output=True, text=True, check=True
+            capture_output=True,
         )
-        # print(f"DEBUG: pactl stdout: {result.stdout.strip()}")
-        return result
+        # Decode with replacement so non-UTF-8 device names don't crash the app.
+        result_text = type('R', (), {
+            'stdout': result.stdout.decode('utf-8', errors='replace'),
+            'stderr': result.stderr.decode('utf-8', errors='replace'),
+            'returncode': result.returncode,
+        })()
+        return result_text
     except FileNotFoundError:
         print("DEBUG: ERROR - 'pactl' command not found. Is it installed and in your PATH?")
-        return None
-    except subprocess.CalledProcessError as e:
-        print(f"DEBUG: ERROR - pactl command failed with exit code {e.returncode}.")
-        print(f"DEBUG: stderr: {e.stderr.strip()}")
         return None
     except Exception as e:
         print(f"DEBUG: An unexpected error occurred with pactl: {e}")
