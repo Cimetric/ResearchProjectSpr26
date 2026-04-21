@@ -27,11 +27,7 @@ party_mode_null_sink:playback_FL
 party_mode_null_sink:playback_FR
 
 --- End of Ports ---
-Attempting to link bluez_card.74_DF_3A_3E_2D_2D:monitor_FL -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FL
-failed to link ports: No such file or directory
-Attempting to link bluez_card.74_DF_3A_3E_2D_2D:monitor_FR -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FR
-failed to link ports: No such file or directory
-Attempting to unlink bluez_card.74_DF_3A_3E_2D_2D:monitor_FL -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FL
-failed to unlink ports: No such file or directory
-Attempting to unlink bluez_card.74_DF_3A_3E_2D_2D:monitor_FR -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FR
-failed to unlink ports: No such file or directory
+Attempting to link bluez_output.74_DF_3A_3E_2D_2D.1:monitor_FL -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FL
+Attempting to link bluez_output.74_DF_3A_3E_2D_2D.1:monitor_FR -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FR
+Attempting to unlink bluez_output.74_DF_3A_3E_2D_2D.1:monitor_FL -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FL
+Attempting to unlink bluez_output.74_DF_3A_3E_2D_2D.1:monitor_FR -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FR
