@@ -40,6 +40,7 @@ class CapturePipeline:
         self.source_name = source_name
         self.sink_name = sink_name
         self.link_ports = []
+        self.created_link_ports = []
         self._running = False
         self.last_error = None
 
@@ -109,17 +110,31 @@ class CapturePipeline:
             command.append("-d")
         command.extend([source_port, sink_port])
 
-        proc = subprocess.Popen(
+        result = subprocess.run(
             command,
-            stdout=subprocess.DEVNULL,
-            stderr=error_log_file
+            capture_output=True,
+            text=True,
         )
-        proc.communicate()
-        return proc.returncode == 0
+        if result.stdout:
+            error_log_file.write(result.stdout)
+        if result.stderr:
+            error_log_file.write(result.stderr)
+        error_log_file.flush()
+
+        if result.returncode == 0:
+            return "created"
+
+        stderr_text = (result.stderr or "").lower()
+        if not disconnect and "file exists" in stderr_text:
+            return "exists"
+        if disconnect and ("no such file" in stderr_text or "not linked" in stderr_text or "does not exist" in stderr_text):
+            return "missing"
+        return "error"
 
     def _unlink_links(self, links):
         for source_port, sink_port in links:
-            if not self._run_link_command(source_port, sink_port, disconnect=True):
+            outcome = self._run_link_command(source_port, sink_port, disconnect=True)
+            if outcome == "error":
                 print(f"ERROR: pw-link -d failed for {source_port} -> {sink_port}. Check pipeline_errors.log")
 
     def _link_source_to_sink(self, source_name, sink_name):
@@ -135,20 +150,26 @@ class CapturePipeline:
             error_log_file.flush()
             return False
 
+        active_links = []
         created_links = []
         for source_port, sink_port in requested_links:
-            if self._run_link_command(source_port, sink_port):
-                created_links.append((source_port, sink_port))
+            outcome = self._run_link_command(source_port, sink_port)
+            if outcome in ("created", "exists"):
+                active_links.append((source_port, sink_port))
+                if outcome == "created":
+                    created_links.append((source_port, sink_port))
                 continue
 
             self.last_error = f"Failed to link {source_port} -> {sink_port}."
             self._unlink_links(created_links)
             self.link_ports = []
+            self.created_link_ports = []
             return False
 
         self.source_name = source_name
         self.sink_name = sink_name
-        self.link_ports = created_links
+        self.link_ports = active_links
+        self.created_link_ports = created_links
         self.last_error = None
         return True
 
@@ -164,8 +185,10 @@ class CapturePipeline:
 
         previous_source = self.source_name
         previous_links = list(self.link_ports)
+        previous_created_links = list(self.created_link_ports)
         self._unlink_links(previous_links)
         self.link_ports = []
+        self.created_link_ports = []
 
         if self._link_source_to_sink(source_name, self.sink_name):
             self._running = True
@@ -174,13 +197,16 @@ class CapturePipeline:
         failed_error = self.last_error
         if previous_links:
             self._link_source_to_sink(previous_source, self.sink_name)
+            if previous_created_links and not self.created_link_ports:
+                self.created_link_ports = previous_created_links
         self._running = bool(self.link_ports)
         self.last_error = failed_error
         return False
 
     def stop(self):
-        self._unlink_links(self.link_ports)
+        self._unlink_links(self.created_link_ports)
         self.link_ports = []
+        self.created_link_ports = []
         self._running = False
         print("PipeWire links stopped.")
 
