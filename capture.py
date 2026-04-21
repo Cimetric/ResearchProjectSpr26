@@ -30,7 +30,7 @@ class CapturePipeline:
         """
         Creates links between the given source and sink for both FL and FR channels.
         """
-        self.source_name = source_name
+        self.source_name = source_name  # Should be e.g. bluez_output.74_DF_3A_3E_2D_2D.1
         self.sink_name = sink_name
         self.link_ports = [
             (f"{self.source_name}:monitor_FL", f"{self.sink_name}:playback_FL"),
