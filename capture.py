@@ -225,7 +225,9 @@ class CapturePipeline:
         return False
 
     def stop(self):
-        self._unlink_links(self.created_link_ports)
+        # Tear down all active links (including pre-existing ones WirePlumber created),
+        # so audio stops completely when the hub is stopped.
+        self._unlink_links(self.link_ports)
         self.link_ports = []
         self.created_link_ports = []
         self._running = False

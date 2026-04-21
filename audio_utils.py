@@ -85,12 +85,16 @@ def _list_bt_cards():
         return []
 
     cards = []
+    all_card_names = []
     current_card = {}
     for raw_line in cards_result.stdout.splitlines():
         line = raw_line.strip()
         if line.startswith("Card #"):
-            if current_card and "bluez_card" in current_card.get("name", ""):
-                cards.append(current_card)
+            if current_card:
+                name = current_card.get("name", "")
+                all_card_names.append(name)
+                if "bluez_card" in name:
+                    cards.append(current_card)
             current_card = {}
         elif line.startswith("Name:"):
             current_card["name"] = line.split("Name:", 1)[1].strip()
@@ -100,9 +104,13 @@ def _list_bt_cards():
             key, val = line.split("=", 1)
             current_card["properties"][key.strip()] = val.strip().strip('"')
 
-    if current_card and "bluez_card" in current_card.get("name", ""):
-        cards.append(current_card)
+    if current_card:
+        name = current_card.get("name", "")
+        all_card_names.append(name)
+        if "bluez_card" in name:
+            cards.append(current_card)
 
+    print(f"BT_CARDS: all cards found: {all_card_names}")
     return cards
 
 def _list_pipewire_bluez_input_nodes():
