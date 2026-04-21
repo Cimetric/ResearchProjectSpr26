@@ -21,3 +21,5 @@ bluez_input.10_A2_D3_EE_BB_2A.2:output_FR
 --- End of Ports ---
 Attempting to link bluez_input.10_A2_D3_EE_BB_2A.2:output_FL -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FL
 failed to link ports: File exists
+Attempting to link bluez_input.10_A2_D3_EE_BB_2A.2:output_FR -> bluez_output.74_DF_3A_3E_2D_2D.1:playback_FR
+failed to link ports: File exists
