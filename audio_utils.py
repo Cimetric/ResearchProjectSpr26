@@ -233,6 +233,13 @@ def get_bt_devices():
         if sink.get("name", "").startswith("bluez_output.")
     }
 
+    # Exclude any BT input whose MAC matches a BT output sink — those are the
+    # speaker's own HFP/SCO microphone, not a phone source.
+    bt_input_source_names = {
+        name for name in bt_input_source_names
+        if _extract_mac(name) not in bt_output_sink_macs
+    }
+
     cards_by_mac = {}
     for card in _list_bt_cards():
         card_mac = _normalize_mac(card.get("properties", {}).get("device.string", "")) or _extract_mac(card.get("name", ""))
@@ -275,6 +282,12 @@ def get_bt_devices():
             device.get("description", "").lower(),
         )
     )
+
+    print(f"BT_DISCOVERY: sink MACs (excluded from sources): {bt_output_sink_macs}")
+    print(f"BT_DISCOVERY: active input nodes: {sorted(bt_input_source_names)}")
+    print(f"BT_DISCOVERY: cards by MAC: {list(cards_by_mac.keys())}")
+    print(f"BT_DISCOVERY: final device list: {[d['description'] for d in processed_devices]}")
+
     return processed_devices
 
 def debug_print_all_audio():

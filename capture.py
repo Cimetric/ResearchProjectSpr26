@@ -348,7 +348,8 @@ class NullSinkManager:
     def teardown(self):
         """Stop watcher and unmute every source we muted."""
         self.stop_watcher()
-        for source_name in list(self._muted_sources):
-            self._set_mute(source_name, False)
-        self._muted_sources.clear()
-        print("All sources unmuted.")
+        if self._muted_sources:
+            for source_name in list(self._muted_sources):
+                self._set_mute(source_name, False)
+            self._muted_sources.clear()
+            print("All sources unmuted.")
