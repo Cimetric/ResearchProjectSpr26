@@ -41,7 +41,11 @@ class MultiPhoneSwitcher(tk.Tk):
 
         # Refresh Button
         self.refresh_btn = ttk.Button(self, text="Refresh Lists", command=self.refresh_lists)
-        self.refresh_btn.pack(pady=10)
+        self.refresh_btn.pack(pady=5)
+
+        # Single action button — refreshes lists then routes selected phone → speaker
+        self.connect_btn = ttk.Button(self, text="Connect Pair", command=self.connect_pair)
+        self.connect_btn.pack(pady=10)
 
         self.status_label = ttk.Label(self, text="Status: Initializing...", foreground="gray")
         self.status_label.pack(pady=10)
@@ -133,6 +137,11 @@ class MultiPhoneSwitcher(tk.Tk):
         choice = self.speaker_var.get()
         self.status_label.config(text=f"Output set to {choice}", foreground="cyan")
 
+
+    def connect_pair(self):
+        """Refresh lists then route the selected phone to the selected speaker."""
+        self.refresh_lists()
+        self.start_hub()
 
     def _try_auto_start(self):
         """Auto-start the hub on launch if devices and a speaker are available."""
