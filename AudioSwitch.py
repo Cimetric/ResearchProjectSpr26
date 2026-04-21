@@ -4,7 +4,7 @@ import subprocess
 import threading
 import time
 from audio_utils import list_devices, get_bt_devices
-from capture import CapturePipeline, NullSinkManager
+from capture import CapturePipeline, NullSinkManager, check_active_links
 
 class MultiPhoneSwitcher(tk.Tk):
     def __init__(self):
@@ -166,6 +166,7 @@ class MultiPhoneSwitcher(tk.Tk):
             text=f"Hub Active. Playing from {initial_device['description']}",
             foreground="green",
         )
+        check_active_links(initial_sink['name'])
         self._schedule_hub_refresh()
     
     def _schedule_hub_refresh(self):

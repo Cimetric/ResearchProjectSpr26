@@ -22,6 +22,27 @@ def log_available_ports():
         error_log_file.write(f"\nERROR: Could not run pw-link -iol: {e}\n")
         error_log_file.flush()
 
+def check_active_links(sink_name):
+    """Print the current PipeWire inputs connected to the given sink."""
+    try:
+        result = subprocess.run(["pw-link", "-iol"], capture_output=True, text=True, check=True)
+    except Exception:
+        print("LINKS: Could not read pw-link -iol")
+        return
+
+    print(f"LINKS: Current connections to {sink_name}:")
+    found_any = False
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(f"{sink_name}:playback"):
+            print(f"  {stripped}")
+            found_any = True
+        elif found_any and stripped.startswith("|<-"):
+            print(f"    {stripped}")
+        elif found_any and not stripped.startswith("|<-"):
+            found_any = False
+
+
 class CapturePipeline:
     """
     Manages a PipeWire link between a source and a sink using pw-link.
@@ -215,29 +236,35 @@ class CapturePipeline:
 
 class NullSinkManager:
     """
-    Creates and manages a 'null' sink to act as an audio black hole,
-    allowing for one stream to be selectively captured while others are silenced.
+    Silences non-active Bluetooth sources using pactl set-source-mute.
+    WirePlumber can keep its routing graph intact; muted sources produce no audio
+    regardless of what WirePlumber does with pw-link connections.
+    NULL_SINK_NAME kept as a class attribute so AudioSwitch can filter it from
+    the speaker list (in case a stale module exists from a previous run).
     """
     NULL_SINK_NAME = "party_mode_null_sink"
 
     def __init__(self):
-        self._module_id = None
         self._active_source_name = None
         self._active_sink_name = None
+        self._muted_sources = set()   # track what we muted so we can unmute on teardown
         self._watching = False
         self._watcher_thread = None
 
     def set_active_source(self, source_name):
-        """Update which source should be left playing; watcher picks this up immediately."""
+        """Switch the protected source. Immediately unmutes it if we had muted it."""
         self._active_source_name = source_name
+        if source_name and source_name in self._muted_sources:
+            self._set_mute(source_name, False)
+            self._muted_sources.discard(source_name)
 
     def start_watcher(self, active_source_name, active_sink_name):
-        """Start a background thread that continuously silences non-active BT sources."""
+        """Start background thread that keeps non-active BT sources muted."""
         self._active_source_name = active_source_name
         self._active_sink_name = active_sink_name
         self._watching = True
         self._watcher_thread = threading.Thread(
-            target=self._watcher_loop, daemon=True, name="NullSinkWatcher"
+            target=self._watcher_loop, daemon=True, name="SourceMuteWatcher"
         )
         self._watcher_thread.start()
 
@@ -247,133 +274,81 @@ class NullSinkManager:
             self._watcher_thread.join(timeout=3)
             self._watcher_thread = None
 
-    def _watcher_loop(self):
-        """Every 2 s, discover all live BT input nodes and silence the non-active ones."""
-        while self._watching:
-            if self._module_id:  # only act when null sink is live
-                try:
-                    result = subprocess.run(
-                        ["pw-link", "-iol"],
-                        capture_output=True, text=True, check=True,
-                    )
-                    node_ports = {}
-                    for raw_line in result.stdout.splitlines():
-                        line = raw_line.strip()
-                        if not line or line.startswith("|") or " (" in line or ":" not in line:
-                            continue
-                        node_name, port_name = line.rsplit(":", 1)
-                        node_ports.setdefault(node_name, set()).add(port_name)
+    def _set_mute(self, source_name, muted):
+        val = "1" if muted else "0"
+        result = subprocess.run(
+            ["pactl", "set-source-mute", source_name, val],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            print(f"MUTE: {'Muted' if muted else 'Unmuted'} {source_name}")
+        else:
+            print(f"MUTE: Failed on {source_name}: {result.stderr.strip()}")
 
-                    bt_sources = [
-                        name for name, ports in node_ports.items()
-                        if name.startswith(("bluez_input.", "bluez_source."))
-                        and any(
-                            p.startswith(("output_", "monitor_", "capture_"))
-                            for p in ports
-                        )
-                    ]
-                    self.silence_sources(
-                        bt_sources,
-                        self._active_source_name,
-                        self._active_sink_name,
-                    )
-                except Exception:
-                    pass
+    def _watcher_loop(self):
+        import audio_utils as _au
+        while self._watching:
+            try:
+                result = subprocess.run(
+                    ["pw-link", "-iol"],
+                    capture_output=True, text=True, check=True,
+                )
+                node_ports = {}
+                for raw_line in result.stdout.splitlines():
+                    line = raw_line.strip()
+                    if not line or line.startswith("|") or " (" in line or ":" not in line:
+                        continue
+                    node_name, port_name = line.rsplit(":", 1)
+                    node_ports.setdefault(node_name, set()).add(port_name)
+
+                bt_sources = [
+                    name for name, ports in node_ports.items()
+                    if name.startswith(("bluez_input.", "bluez_source."))
+                    and any(p.startswith(("output_", "monitor_", "capture_")) for p in ports)
+                ]
+
+                sink_mac = _au._extract_mac(self._active_sink_name) if self._active_sink_name else ""
+                print(f"WATCHER: sources={bt_sources}  active={self._active_source_name}")
+
+                for source_name in bt_sources:
+                    if source_name == self._active_source_name:
+                        # Ensure active source stays unmuted
+                        if source_name in self._muted_sources:
+                            self._set_mute(source_name, False)
+                            self._muted_sources.discard(source_name)
+                        continue
+                    if sink_mac and _au._extract_mac(source_name) == sink_mac:
+                        print(f"  WATCHER: Skipping {source_name} (speaker's own mic)")
+                        continue
+                    # Mute this non-active source (idempotent — pactl ignores if already muted)
+                    if source_name not in self._muted_sources:
+                        self._set_mute(source_name, True)
+                        self._muted_sources.add(source_name)
+
+                check_active_links(self._active_sink_name)
+            except Exception as exc:
+                print(f"WATCHER: exception: {exc}")
             time.sleep(2)
 
     def setup(self):
-        """Creates the null sink module if not already present."""
-        self.teardown()
-        result = subprocess.run(
-            ["pactl", "load-module", "module-null-sink",
-             f"sink_name={self.NULL_SINK_NAME}",
-             f"sink_properties=device.description='{self.NULL_SINK_NAME}'"],
-            capture_output=True, text=True
-        )
-        if result.returncode == 0:
-            self._module_id = result.stdout.strip()
-            print(f"Null sink created (module {self._module_id}).")
-            return True
-        print(f"Error creating null sink: {result.stderr}")
-        return False
-
-    def teardown(self):
-        """Stops the watcher and removes the null sink."""
-        self.stop_watcher()
-        if self._module_id:
-            subprocess.run(["pactl", "unload-module", self._module_id],
-                           capture_output=True, text=True)
-            print("Null sink removed.")
-            self._module_id = None
-        # Also sweep for any stale instance left from a previous run.
+        """Cleans up any stale null sink from a previous crash, then returns True."""
+        # Remove any leftover null sink module so it doesn't appear in speaker list.
         sinks_result = subprocess.run(
             ["pactl", "list", "short", "modules"],
-            capture_output=True, text=True
+            capture_output=True, text=True,
         )
         for line in sinks_result.stdout.splitlines():
             if self.NULL_SINK_NAME in line:
                 mod_id = line.split()[0]
                 subprocess.run(["pactl", "unload-module", mod_id],
                                capture_output=True, text=True)
-                print(f"Found and removed stale null sink (module {mod_id}).")
+                print(f"Removed stale null sink (module {mod_id}).")
+        return True
 
-    def silence_sources(self, source_names, active_source_name, active_sink_name=None):
-        """
-        Route non-active BT sources to the null sink using pw-link at the
-        PipeWire graph level.
-        The active source and any source sharing a MAC with the active sink are left untouched.
-        """
-        if not self._module_id:
-            return
-
-        import audio_utils as _au
-
-        # Normalize the sink MAC so we can compare against source MACs.
-        sink_mac = _au._extract_mac(active_sink_name) if active_sink_name else ""
-
-        try:
-            result = subprocess.run(["pw-link", "-iol"],
-                                    capture_output=True, text=True, check=True)
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            return
-
-        ports = set()
-        for raw_line in result.stdout.splitlines():
-            line = raw_line.strip()
-            if line and not line.startswith("|") and " (" not in line and ":" in line:
-                ports.add(line)
-
-        null_sink_left  = f"{self.NULL_SINK_NAME}:playback_FL"
-        null_sink_right = f"{self.NULL_SINK_NAME}:playback_FR"
-        if null_sink_left not in ports:
-            return
-
-        for source_name in source_names:
-            if source_name == active_source_name:
-                continue
-            # Skip sources that belong to the same physical device as the active sink
-            # (e.g. speaker's HFP mic); silencing it would trigger an HFP profile
-            # switch that kills the A2DP playback session.
-            if sink_mac and _au._extract_mac(source_name) == sink_mac:
-                continue
-            for left_s, right_s in (("output_FL", "output_FR"),
-                                    ("monitor_FL", "monitor_FR"),
-                                    ("capture_FL", "capture_FR")):
-                src_left  = f"{source_name}:{left_s}"
-                src_right = f"{source_name}:{right_s}"
-                if src_left in ports and src_right in ports:
-                    subprocess.run(["pw-link", src_left,  null_sink_left],
-                                   capture_output=True, text=True)
-                    subprocess.run(["pw-link", src_right, null_sink_right],
-                                   capture_output=True, text=True)
-                    print(f"Silenced {source_name} → null sink")
-                    break
-            for mono_s in ("output_MONO", "monitor_MONO", "capture_MONO"):
-                src_mono = f"{source_name}:{mono_s}"
-                if src_mono in ports:
-                    subprocess.run(["pw-link", src_mono, null_sink_left],
-                                   capture_output=True, text=True)
-                    subprocess.run(["pw-link", src_mono, null_sink_right],
-                                   capture_output=True, text=True)
-                    print(f"Silenced (mono) {source_name} → null sink")
-                    break
+    def teardown(self):
+        """Stop watcher and unmute every source we muted."""
+        self.stop_watcher()
+        for source_name in list(self._muted_sources):
+            self._set_mute(source_name, False)
+        self._muted_sources.clear()
+        print("All sources unmuted.")
