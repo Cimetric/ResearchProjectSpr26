@@ -17,63 +17,44 @@ class CapturePipeline:
     """
     def __init__(self, source_name, sink_name):
         """
-        Creates a link between the given source and sink.
+        Creates links between the given source and sink for both FL and FR channels.
         """
         self.source_name = source_name
         self.sink_name = sink_name
-        self.link_proc = None
-
-        # For pw-link, we need to specify the output port of the source
-        # and the input port of the sink. Appending a colon ':' tells
-        # pw-link to auto-connect all available ports.
-        source_port = f"{self.source_name}:"
-        sink_port = f"{self.sink_name}:"
-        
-        command = ["pw-link", source_port, sink_port]
-        print(f"DEBUG: Running PipeWire link command: {' '.join(command)}")
-        
-        # Use the shared error log file
-        self.link_proc = subprocess.Popen(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=error_log_file
-        )
-        # We don't need to wait, pw-link creates the link and exits.
-        # We can check the return code to see if it was successful.
-        self.link_proc.communicate() # Wait for process to finish
-        if self.link_proc.returncode != 0:
-            print(f"ERROR: pw-link command failed with exit code {self.link_proc.returncode}. Check pipeline_errors.log")
-
+        self.link_ports = [
+            (f"{self.source_name}:monitor_FL", f"{self.sink_name}:playback_FL"),
+            (f"{self.source_name}:monitor_FR", f"{self.sink_name}:playback_FR")
+        ]
+        for src_port, sink_port in self.link_ports:
+            command = ["pw-link", src_port, sink_port]
+            print(f"DEBUG: Running PipeWire link command: {' '.join(command)}")
+            proc = subprocess.Popen(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=error_log_file
+            )
+            proc.communicate()
+            if proc.returncode != 0:
+                print(f"ERROR: pw-link command failed for {src_port} -> {sink_port} with exit code {proc.returncode}. Check pipeline_errors.log")
 
     def stop(self):
         """
-        Destroys the link between the source and sink.
+        Destroys the links between the source and sink for both FL and FR channels.
         """
-        # Append colons here as well for consistency
-        source_port = f"{self.source_name}:"
-        sink_port = f"{self.sink_name}:"
-
-        command = ["pw-link", "-d", source_port, sink_port]
-        print(f"DEBUG: Running PipeWire unlink command: {' '.join(command)}")
-        
-        # Use the shared error log file
-        unlink_proc = subprocess.Popen(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=error_log_file
-        )
-        unlink_proc.communicate() # Wait for it to finish
-        if unlink_proc.returncode != 0:
-            print(f"ERROR: pw-link -d command failed with exit code {unlink_proc.returncode}. Check pipeline_errors.log")
-        print("PipeWire link stopped.")
+        for src_port, sink_port in self.link_ports:
+            command = ["pw-link", "-d", src_port, sink_port]
+            print(f"DEBUG: Running PipeWire unlink command: {' '.join(command)}")
+            proc = subprocess.Popen(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=error_log_file
+            )
+            proc.communicate()
+            if proc.returncode != 0:
+                print(f"ERROR: pw-link -d command failed for {src_port} -> {sink_port} with exit code {proc.returncode}. Check pipeline_errors.log")
+        print("PipeWire links stopped.")
 
     def is_running(self):
-        """
-        Since pw-link exits immediately, we can't check if the process is running.
-        A more advanced check would be to parse `pw-links -l`, but for now,
-        we assume if the object exists, the link is meant to be active.
-        The stop() method is the only way to tear it down.
-        """
         return True # Simplified check
 
 class NullSinkManager:
