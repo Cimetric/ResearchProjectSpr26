@@ -2,7 +2,7 @@
 
 ******************************************************************************************************
 |  ATTENTION: IF YOU ARE SEEING THIS MESSAGE IT MEANS THAT THE PROJECT IS NOT FULLY COMPLETE.        |
-|  WHILE THE BASE FUNCTIONALITY THERE IS SOME CLEANING THAT IS REQUIRED BEFORE IT IS DISTRIBUTABLE.  |
+|  WHILE THE BASE FUNCTIONALITY IS UP THERE IS SOME CLEANING THAT IS REQUIRED BEFORE IT IS DISTRIBUTABLE.  |
 ******************************************************************************************************
 
 This project is a collection of Python scripts and utilities for audio device management, capture, and debugging on Linux systems (with a focus on PipeWire and related audio frameworks). It is a work in progress and is being developed as part of an independent study research project.
